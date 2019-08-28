@@ -34,5 +34,5 @@
 	"requests":		{ "fe": true },
 	"testinfra":		{ "fe": true, "bootstrap": true, "version": "1.16.0" },
 	"yoyo-migrations":	{ "fe": true },
-	"libvirt-python":	{ "fe": true, "version": "3.3.0" }
+	"libvirt-python":	{ "fe": true }
 }
