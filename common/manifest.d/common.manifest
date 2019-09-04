@@ -23,6 +23,7 @@ stack-config-server
 stack-discovery
 stack-docker
 stack-examples
+stack-graphql-api
 stack-kickstart
 stack-mq
 stack-pxeboot
