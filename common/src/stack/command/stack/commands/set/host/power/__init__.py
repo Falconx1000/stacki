@@ -8,14 +8,13 @@ import stack.commands
 import stack.mq
 import socket
 import json
-from stack.exception import ArgRequired, ParamError
-
+from stack.exception import ArgRequired, ParamError, CommandError
 
 class Command(stack.commands.set.host.command):
 	"""
 	Sends a "power" command to a host. Valid power commands are: on, off and reset. This
-	command uses IPMI to change the power setting on a host.
-	
+	command uses IPMI for hardware based hosts to change the power setting.
+
 	<arg type='string' name='host' repeat='1'>
 	One or more host names.
 	</arg>
@@ -25,56 +24,28 @@ class Command(stack.commands.set.host.command):
 	</param>
 
 	<param type='boolean' name='debug' optional='1'>
-	Print debug output from the ipmitool command.
+	Print debug output from the command. For hardware based hosts, prints
+	the output from ipmitool.
 	</param>
 
 	<example cmd='set host power stacki-1-1 command=reset'>
 	Performs a hard power reset on host stacki-1-1.
 	</example>
 	"""
-
-	def doPower(self, host, ipmi_ip, cmd):
-		import subprocess
-		import shlex
-
-		if not ipmi_ip:
-			return
-
-		username = self.getHostAttr(host, 'ipmi_username')
-		if not username:
-			username = 'root'
-
-		password = self.getHostAttr(host, 'ipmi_password')
-		if not password:
-			password = 'admin'
-
-		ipmi = 'ipmitool -I lanplus -H %s -U %s -P %s chassis power %s' \
-			% (ipmi_ip, username, password, cmd)
-
-		p = subprocess.Popen(shlex.split(ipmi), stdout = subprocess.PIPE,
-			stderr = subprocess.STDOUT)
-		out, err = p.communicate()
-
-		if self.debug:
-			self.beginOutput()
-			self.addOutput(host, out.decode())
-			self.endOutput(padChar='', trimOwner=True)
-
+	def mq_publish(host, cmd):
 		ttl = 60*10
 		if cmd == 'off':
 			ttl = -1
 
-		msg = { 'source' : host, 
-			'channel': 'health', 
+		msg = { 'source' : host,
+			'channel': 'health',
 			'ttl'    : ttl,
 			'payload': '{"state": "power %s"}' % cmd }
 
 		tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-		tx.sendto(json.dumps(msg).encode(), 
+		tx.sendto(json.dumps(msg).encode(),
 			  ('127.0.0.1', stack.mq.ports.publish))
 		tx.close()
-
-
 
 	def run(self, params, args):
 		if not len(args):
@@ -92,12 +63,20 @@ class Command(stack.commands.set.host.command):
 			debug = True
 		elif cmd not in [ 'on', 'off', 'reset' ]:
 			raise ParamError(self, 'command', 'must be "on", "off" or "reset"')
-		
-		self.debug = self.str2bool(debug)
-		
-		for host in self.getHostnames(args):
-			for o in self.call('list.host.interface', [ host ]):
-				if o['interface'] == 'ipmi':
-					self.doPower(host, o['ip'], cmd)
-					break
 
+		self.debug = self.str2bool(debug)
+
+		for host in self.getHostnames(args):
+			imp = 'ipmi'
+			vm_type = self.getHostAttr(host, 'vm.type')
+			if vm_type:
+				imp = vm_type
+			try:
+				debug = self.runImplementation(imp, [host])
+			except CommandError as msg:
+				debug = msg
+			if self.debug:
+				self.beginOutput()
+				self.addOutput(host, debug)
+				self.endOutput(padChar='', trimOwner=True)
+			mq_publish(host, cmd)
