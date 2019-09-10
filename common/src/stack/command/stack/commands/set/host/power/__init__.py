@@ -8,6 +8,7 @@ import stack.commands
 import stack.mq
 import socket
 import json
+from glob import glob
 from stack.exception import ArgRequired, ParamError, CommandError
 
 class Command(stack.commands.set.host.command):
@@ -51,7 +52,8 @@ class Command(stack.commands.set.host.command):
 		if not len(args):
 			raise ArgRequired(self, 'host')
 
-		cmd, debug = self.fillParams([ ('command', None, True), ('debug', False) ])
+		cmd, debug, force_imp = self.fillParams([ ('command', None, True), ('debug', False), ('imp', None) ])
+		power_imp = []
 
 		if cmd == 'status':
 			#
@@ -64,19 +66,40 @@ class Command(stack.commands.set.host.command):
 		elif cmd not in [ 'on', 'off', 'reset' ]:
 			raise ParamError(self, 'command', 'must be "on", "off" or "reset"')
 
+		# Get all the set power implemenations
+		# Besides ipmi and ssh
+		power_imp = glob('imp_*.py')
 		self.debug = self.str2bool(debug)
 
 		for host in self.getHostnames(args):
+			debug_msg = ''
+			self.beginOutput()
+
 			imp = 'ipmi'
-			vm_type = self.getHostAttr(host, 'vm.type')
-			if vm_type:
-				imp = vm_type
+			if force_imp:
+				imp = force_imp
+
+			# Try using ipmi first
+			# Unless the imp flag is set
 			try:
-				debug = self.runImplementation(imp, [host])
+				debug_msg = self.runImplementation(imp, [host, cmd])
+				mq_publish(host, cmd)
 			except CommandError as msg:
-				debug = msg
+				for imp in power_imp:
+					try:
+						self.runImplementation(imp, [host, cmd])
+						mq_publish(host, cmd)
+					except CommandError as imp_error:
+						debug_msg = f'Used {imp} implementation on {host} with cmd {cmd}, implmentation {imp} failed with:\n{imp_error}'
+						self.addOutput(host, debug_msg)
+				try:
+					self.runImplementation('ssh', [host, cmd])
+					mq_publish(host, cmd)
+				except CommandError as ssh_error:
+					debug_msg = f'Used ssh implementation on {host} with cmd {cmd}, implmentation {imp} failed with:\n{ssh_error}'
+					self.addOutput(host, f'Could not set power on host {host}: {ssh_error}')
+				if not self.debug:
+					self.endOutput(padChar='', trimOwner=True)
 			if self.debug:
-				self.beginOutput()
-				self.addOutput(host, debug)
+				self.addOutput(host, debug_msg)
 				self.endOutput(padChar='', trimOwner=True)
-			mq_publish(host, cmd)
