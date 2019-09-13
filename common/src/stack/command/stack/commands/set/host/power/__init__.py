@@ -10,6 +10,7 @@ import socket
 import json
 import re
 from glob import glob
+from pathlib import Path
 from stack.exception import ArgRequired, ParamError, CommandError
 
 class Command(stack.commands.set.host.command):
@@ -72,7 +73,7 @@ class Command(stack.commands.set.host.command):
 
 		# Get all the set power implemenations
 		# Besides ipmi and ssh
-		power_imp = [imp for imp in glob('imp_*.py') if 'ssh' not in imp and 'ipmi' not in imp]
+		power_imp = [imp for imp in glob(f'{Path(__file__).parent}/imp_*.py') if 'ssh' not in imp and 'ipmi' not in imp]
 		imp_names = re.findall('imp_(.*).py', '\n'.join(power_imp))
 		self.debug = self.str2bool(debug)
 
@@ -94,7 +95,6 @@ class Command(stack.commands.set.host.command):
 				msgs.append(ipmi_msg)
 			except CommandError as msg:
 				debug_msgs.append(f'{imp} failed to set power cmd {cmd}: {msg}')
-
 				# If the force flag was set
 				# only run that implementation
 				if imp == force_imp:
@@ -118,6 +118,7 @@ class Command(stack.commands.set.host.command):
 						self.mq_publish(host, cmd)
 					except CommandError as ssh_error:
 						debug_msgs.append(str(ssh_error))
+						#debug_msgs.append(f'Used ssh implementation on {host} with cmd {cmd}, implmentation {imp} failed with:\n{ssh_error}')
 						msgs.append(f'Could not set power cmd {cmd} on host {host}')
 			if self.debug:
 				self.addOutput(host, '\n'.join(msgs))
