@@ -98,9 +98,9 @@ class Command(stack.commands.set.host.command):
 				# If the force flag was set
 				# only run that implementation
 				if imp == force_imp:
-					self.addOutput(host, '\n'.join(debug_msgs))
+					debug_str = '\n'.join(debug_msgs)
 					self.endOutput(padChar='', trimOwner=True)
-					continue
+					raise CommandError(self, f'Could not set power cmd {cmd} on host {host}\n{debug_str}')
 				for imp in imp_names:
 					debug_msgs.append(f'Attempting to set power via {imp}')
 					try:
@@ -118,8 +118,11 @@ class Command(stack.commands.set.host.command):
 						self.mq_publish(host, cmd)
 					except CommandError as ssh_error:
 						debug_msgs.append(str(ssh_error))
-						#debug_msgs.append(f'Used ssh implementation on {host} with cmd {cmd}, implmentation {imp} failed with:\n{ssh_error}')
-						msgs.append(f'Could not set power cmd {cmd} on host {host}')
+						if debug_msgs:
+							debug_str = '\n'.join(debug_msgs)
+							raise CommandError(self, f'Could not set power cmd {cmd} on host {host}\n{debug_str}')
+						else:
+							raise CommandError(self, f'Could not set power cmd {cmd} on host {host}')
 			if self.debug:
 				self.addOutput(host, '\n'.join(msgs))
 				self.addOutput(host, '\n'.join(debug_msgs))
