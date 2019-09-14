@@ -24,11 +24,17 @@ class Implementation(stack.commands.Implementation):
 		if not ipmi_ip:
 			raise CommandError(self, f'{host} missing ipmi interface.')
 
-		username = api.Call('list.host.attr', args = [host, 'attr=ipmi_username'])
+		try:
+			username = api.Call('list.host.attr', args = [host, 'attr=ipmi_username'])[0].get('value')
+		except IndexError:
+			pass
 		if not username:
 			username = 'root'
 
-		password = api.Call('list.host.attr', args = [host, 'attr=ipmi_password'])[0]['value']
+		try:
+			password = api.Call('list.host.attr', args = [host, 'attr=ipmi_password'])[0].get('value')
+		except IndexError:
+			pass
 		if not password:
 			password = 'admin'
 
