@@ -10,12 +10,12 @@ class TestSetHostPower:
 	def test_multiple_hosts(self, host):
 		result = host.run('stack set host power backend-0-0 backend-0-1 command="status"')
 		assert result.rc == 0
-		assert result.stdout == dedent('''\
+		assert result.stdout.strip() == dedent('''\
 			Chassis Power is on
 
 			Chassis Power is on
 
-		''')
+		''').strip()
 
 	def test_invalid_command(self, host):
 		result = host.run('stack set host power backend-0-0 command="invalid_command"')
