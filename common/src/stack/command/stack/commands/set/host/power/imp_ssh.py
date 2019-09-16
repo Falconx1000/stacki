@@ -21,21 +21,21 @@ class Implementation(stack.commands.Implementation):
 			cmd_output = _exec(shlex.split(f'ssh {host} "shutdown -h now"'))
 			out = cmd_output.stdout
 			err = cmd_output.stderr
-			if err:
+			if cmd_output.returncode != 0:
 				raise CommandError(self, err)
 
 		if cmd == 'reset':
 			cmd_output = _exec(shlex.split(f'ssh {host} "reboot"'))
 			out = cmd_output.stdout
 			err = cmd_output.stderr
-			if err:
+			if cmd_output.returncode != 0:
 				raise CommandError(self, err)
 
 		if cmd == 'status':
 			cmd_output = _exec(shlex.split(f'ssh {host} "hostname"'))
 			out = cmd_output.stdout
 			err = cmd_output.stderr
-			if not err:
-				return f'Chassis Power is on'
-			else:
+			if cmd_output.returncode != 0:
 				raise CommandError(self, f'Chassis Power is unreachable via ssh:\n{err}')
+			else:
+				return f'Chassis Power is on'

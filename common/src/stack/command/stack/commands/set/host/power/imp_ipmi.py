@@ -44,6 +44,6 @@ class Implementation(stack.commands.Implementation):
 		cmd_output = _exec(shlex.split(ipmi))
 		out = cmd_output.stdout
 		err = cmd_output.stderr
-		if err:
+		if cmd_output.returncode != 0:
 			raise CommandError(self, err)
 		return out
