@@ -31,19 +31,25 @@ class Command(stack.commands.set.host.command):
 	the output from ipmitool.
 	</param>
 
-	<param type='string' name='force' optional='1'>
-	Force a method for setting power on a host.
+	<param type='string' name='use-method' optional='1'>
+	Set a desired method for communicating to hosts, possible methods
+	include but are not limited to ipmi and ssh.
 	</param>
 
 	<example cmd='set host power stacki-1-1 command=reset'>
 	Performs a hard power reset on host stacki-1-1.
 	</example>
 
-	<example cmd='set host power stacki-1-1 command=off force=ssh'>
+	<example cmd='set host power stacki-1-1 command=off use-method=ssh'>
 	Turns off host stacki-1-1 using ssh.
 	</example>
 	"""
 	def mq_publish(self, host, cmd):
+		"""
+		Publish the power status to the
+		message queue
+		"""
+
 		ttl = 60*10
 		if cmd == 'off':
 			ttl = -1
@@ -65,68 +71,81 @@ class Command(stack.commands.set.host.command):
 		cmd, debug, force_imp = self.fillParams([
 			('command', None, True),
 			('debug', False),
-			('force', None)
+			('use-method', None)
 		])
 		power_imp = []
-		if cmd not in [ 'on', 'off', 'reset', 'status' ]:
-			raise ParamError(self, 'command', 'must be "on", "off", "reset", or "status"')
-
-		# Get all the set power implemenations
-		# Besides ipmi and ssh
-		power_imp = [imp for imp in glob(f'{Path(__file__).parent}/imp_*.py') if 'ssh' not in imp and 'ipmi' not in imp]
-		imp_names = re.findall('imp_(.*).py', '\n'.join(power_imp))
 		self.debug = self.str2bool(debug)
+
+		# The first implementation is ipmi by defualt
+		# but can be forced by the use-method parameter
+		# If this is set, only that implementation will be run
+		imp = 'ipmi'
+		imp_success = False
+		if force_imp:
+			imp = force_imp
+
+		# Gather all set power implmentations besides ipmi and ssh
+		power_imp = [imp for imp in glob(f'{Path(__file__).parent}/imp_*.py') if 'ssh' not in imp and 'ipmi' not in imp]
+
+		# Extract the unique implementation names
+		other_imp = re.findall('imp_(.*).py', '\n'.join(power_imp))
+
+		imp_names = [imp]
+
+		# Add any additional implementations to the list
+		for method in other_imp:
+			imp_names.append(method)
+
+		# End with ssh
+		imp_names.append('ssh')
+
+		if cmd not in [ 'on', 'off', 'reset', 'status' ]:
+			raise ParamError(self, 'command', 'must be "on", "off", "reset"')
 
 		for host in self.getHostnames(args):
 			debug_msgs = []
+
+			# msgs gathers the normal output of the command
 			msgs = []
 			self.beginOutput()
 
-			imp = 'ipmi'
-			if force_imp:
-				imp = force_imp
-
-			# Try using ipmi first
-			# Unless the force param is set
-			try:
+			for imp in imp_names:
 				debug_msgs.append(f'Attempting to set power via {imp}')
-				ipmi_msg = self.runImplementation(imp, [host, cmd])
-				self.mq_publish(host, cmd)
-				msgs.append(ipmi_msg)
-			except CommandError as msg:
-				debug_msgs.append(f'{imp} failed to set power cmd {cmd}: {msg}')
-				# If the force flag was set
-				# only run that implementation
-				if imp == force_imp:
-					debug_str = '\n'.join(debug_msgs)
-					self.endOutput(padChar='', trimOwner=True)
-					raise CommandError(self, f'Could not set power cmd {cmd} on host {host}\n{debug_str}')
-				for imp in imp_names:
-					debug_msgs.append(f'Attempting to set power via {imp}')
-					try:
-						imp_msg = self.runImplementation(imp, [host, cmd])
+				try:
+					imp_msg = self.runImplementation(imp, [host, cmd])
+					if imp_msg:
 						msgs.append(str(imp_msg))
-						self.mq_publish(host, cmd)
+					self.mq_publish(host, cmd)
+
+					# Set the flag since a CommandError
+					# wasn't raised when running the implementation
+					# so it succeeded
+					imp_success = True
+					break
+				except CommandError as imp_error:
+					debug_msgs.append(str(imp_error))
+
+					# if force_imp was set, don't try any
+					# other implementations
+					if force_imp:
 						break
-					except CommandError as imp_error:
-						debug_msgs.append(str(imp_error))
-				if not msgs:
-					try:
-						debug_msgs.append('Attempting to set power via ssh')
-						ssh_msg = self.runImplementation('ssh', [host, cmd])
-						msgs.append(str(ssh_msg))
-						self.mq_publish(host, cmd)
-					except CommandError as ssh_error:
-						debug_msgs.append(str(ssh_error))
-						if debug_msgs:
-							debug_str = '\n'.join(debug_msgs)
-							raise CommandError(self, f'Could not set power cmd {cmd} on host {host}\n{debug_str}')
-						else:
-							raise CommandError(self, f'Could not set power cmd {cmd} on host {host}')
+
+			msg_output = []
+			if msgs:
+				msg_output = '\n'.join(msgs)
+
+			# debug_msgs will have always at least one entry
+			debug_output = '\n'.join(debug_msgs)
 			if self.debug:
-				self.addOutput(host, '\n'.join(msgs))
-				self.addOutput(host, '\n'.join(debug_msgs))
-				self.endOutput(padChar='', trimOwner=True)
-			else:
-				self.addOutput(host, '\n'.join(msgs))
-				self.endOutput(padChar='', trimOwner=True)
+				self.addOutput(host, msg_output)
+				self.addOutput(host, debug_output)
+			elif msgs:
+				self.addOutput(host, msg_output)
+			self.endOutput(padChar='', trimOwner=True)
+
+			# Raise a CommandError if no implementation worked
+			if not imp_success:
+				if self.debug:
+					raise CommandError(self, f'Could not set power cmd {cmd} on host {host}:\n{debug_output}')
+				else:
+					raise CommandError(self, f'Could not set power cmd {cmd} on host {host}')

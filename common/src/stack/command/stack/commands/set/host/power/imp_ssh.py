@@ -5,7 +5,6 @@
 # @copyright@
 
 import stack.commands
-import shlex
 from stack.util import _exec
 from stack.exception import CommandError
 
@@ -14,25 +13,32 @@ class Implementation(stack.commands.Implementation):
 		host = args[0]
 		cmd = args[1]
 
+		# Unlike ipmi, ssh has no way to start a host that is off
+		# We still have to handle the command however
 		if cmd == 'on':
 			raise CommandError(self, f'Cannot use ssh to start host {host}')
 
-		if cmd == 'off':
-			cmd_output = _exec(shlex.split(f'ssh {host} "shutdown -h now"'))
+		elif cmd == 'off':
+			cmd_output = _exec(f'ssh {host} "shutdown -h now"', shlexsplit=True)
 			out = cmd_output.stdout
 			err = cmd_output.stderr
 			if cmd_output.returncode != 0:
 				raise CommandError(self, err)
 
-		if cmd == 'reset':
-			cmd_output = _exec(shlex.split(f'ssh {host} "reboot"'))
+		elif cmd == 'reset':
+			cmd_output = _exec(f'ssh {host} "reboot"', shlexsplit=True)
 			out = cmd_output.stdout
 			err = cmd_output.stderr
-			if cmd_output.returncode != 0:
+
+			# After issueing a reboot, ssh will send a Connection closed message in stderr
+			# We shouldn't raise an error because of this
+			if cmd_output.returncode != 0 and f'Connection to {host} closed by remote host' not in err:
 				raise CommandError(self, err)
 
-		if cmd == 'status':
-			cmd_output = _exec(shlex.split(f'ssh {host} "hostname"'))
+		elif cmd == 'status':
+
+			# If we can run a command on the remote host, it's up
+			cmd_output = _exec(f'ssh {host} "hostname"', shlexsplit=True)
 			out = cmd_output.stdout
 			err = cmd_output.stderr
 			if cmd_output.returncode != 0:

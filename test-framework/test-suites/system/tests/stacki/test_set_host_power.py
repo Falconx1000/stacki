@@ -20,8 +20,8 @@ class TestSetHostPower:
 		result = host.run('stack set host power backend-0-0 command="invalid_command"')
 		assert result.rc == 255
 		assert result.stderr == dedent('''\
-			error - "command" parameter must be "on", "off", "reset", or "status"
-			{host ...} {command=string} [debug=boolean] [force=string]
+			error - "command" parameter must be "on", "off", "reset"
+			{host ...} {command=string} [debug=boolean] [use-method=string]
 		''')
 
 	def test_invalid_host(self, host):
@@ -30,10 +30,10 @@ class TestSetHostPower:
 		assert result.stderr.strip() == 'error - cannot resolve host "invalid_host"'
 
 	def test_invalid_ipmi(self, host):
-		result = host.run('stack set host power backend-0-0 command="status" force=ipmi')
+		result = host.run('stack set host power backend-0-0 command="status" debug=y use-method=ipmi')
 		assert result.rc == 255
 		assert result.stderr == dedent('''\
-			error - Could not set power cmd status on host backend-0-0
+			error - Could not set power cmd status on host backend-0-0:
 			Attempting to set power via ipmi
-			ipmi failed to set power cmd status: error - backend-0-0 missing ipmi interface.
+			error - backend-0-0 missing ipmi interface.
 	''')
