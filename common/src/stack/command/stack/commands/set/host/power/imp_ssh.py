@@ -5,7 +5,7 @@
 # @copyright@
 
 import stack.commands
-from stack.util import _exec
+import subprocess
 from stack.exception import CommandError
 
 class Implementation(stack.commands.Implementation):
@@ -19,29 +19,41 @@ class Implementation(stack.commands.Implementation):
 			raise CommandError(self, f'Cannot use ssh to start host {host}')
 
 		elif cmd == 'off':
-			cmd_output = _exec(f'ssh {host} "shutdown -h now"', shlexsplit=True)
+			cmd_output = self.owner._exec(
+				f'ssh {host} "shutdown -h now"',
+				shlexsplit=True,
+				stderr=subprocess.STDOUT,
+				stdout=subprocess.PIPE
+			)
 			out = cmd_output.stdout
-			err = cmd_output.stderr
-			if cmd_output.returncode != 0:
-				raise CommandError(self, err)
+			if cmd_output.returncode != 0 and f'Connection to {host} closed by remote host' not in out:
+				raise CommandError(self, out)
 
 		elif cmd == 'reset':
-			cmd_output = _exec(f'ssh {host} "reboot"', shlexsplit=True)
+			cmd_output = self.owner._exec(
+				f'ssh {host} "reboot"',
+				shlexsplit=True,
+				stderr=subprocess.STDOUT,
+				stdout=subprocess.PIPE
+			)
 			out = cmd_output.stdout
-			err = cmd_output.stderr
 
 			# After issueing a reboot, ssh will send a Connection closed message in stderr
 			# We shouldn't raise an error because of this
-			if cmd_output.returncode != 0 and f'Connection to {host} closed by remote host' not in err:
-				raise CommandError(self, err)
+			if cmd_output.returncode != 0 and f'Connection to {host} closed by remote host' not in out:
+				raise CommandError(self, out)
 
 		elif cmd == 'status':
 
 			# If we can run a command on the remote host, it's up
-			cmd_output = _exec(f'ssh {host} "hostname"', shlexsplit=True)
+			cmd_output = self.owner._exec(
+				f'ssh {host} "hostname"',
+				shlexsplit=True,
+				stderr=subprocess.STDOUT,
+				stdout=subprocess.PIPE
+			)
 			out = cmd_output.stdout
-			err = cmd_output.stderr
 			if cmd_output.returncode != 0:
-				raise CommandError(self, f'Chassis Power is unreachable via ssh:\n{err}')
+				raise CommandError(self, f'Chassis Power is unreachable via ssh:\n{out}')
 			else:
-				return f'Chassis Power is on'
+				return f'Chassis Power is on\n'

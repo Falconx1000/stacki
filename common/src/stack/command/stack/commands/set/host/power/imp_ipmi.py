@@ -5,7 +5,7 @@
 # @copyright@
 
 import stack.commands
-from stack.util import _exec
+import subprocess
 from stack.exception import CommandError
 
 class Implementation(stack.commands.Implementation):
@@ -41,9 +41,8 @@ class Implementation(stack.commands.Implementation):
 
 		ipmi = f'ipmitool -I lanplus -H {ipmi_ip} -U {username} -P {password} chassis power {cmd}'
 
-		cmd_output = _exec(ipmi, shlexsplit=True)
+		cmd_output = self.owner._exec(ipmi, shlexsplit=True, stderr=subprocess.STDOUT, stdout=subprocess.PIPE)
 		out = cmd_output.stdout
-		err = cmd_output.stderr
 		if cmd_output.returncode != 0:
-			raise CommandError(self, err)
+			raise CommandError(self, out)
 		return out

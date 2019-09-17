@@ -8,9 +8,6 @@ import stack.commands
 import stack.mq
 import socket
 import json
-import re
-from glob import glob
-from pathlib import Path
 from stack.exception import ArgRequired, ParamError, CommandError
 
 class Command(stack.commands.set.host.command):
@@ -73,31 +70,33 @@ class Command(stack.commands.set.host.command):
 			('debug', False),
 			('use-method', None)
 		])
-		power_imp = []
+		imp_names = []
 		self.debug = self.str2bool(debug)
 
-		# The first implementation is ipmi by defualt
+		# Flag for if an implementation has
+		# successfully run
+		imp_success = False
+
+		self.loadImplementation()
+
+		# The first implementation is ipmi by default
 		# but can be forced by the use-method parameter
 		# If this is set, only that implementation will be run
-		imp = 'ipmi'
-		imp_success = False
-		if force_imp:
-			imp = force_imp
+		if force_imp and force_imp in self.impl_list:
+			imp_names.append(force_imp)
 
-		# Gather all set power implmentations besides ipmi and ssh
-		power_imp = [imp for imp in glob(f'{Path(__file__).parent}/imp_*.py') if 'ssh' not in imp and 'ipmi' not in imp]
+		# Otherwise use all the implementations
+		else:
+			# Gather all set power implmentations besides ipmi and ssh
+			imp_names  = [imp for imp in self.impl_list if 'ssh' not in imp and 'ipmi' not in imp]
 
-		# Extract the unique implementation names
-		other_imp = re.findall('imp_(.*).py', '\n'.join(power_imp))
+			# Add ipmi to be the first implementation used
+			if 'ipmi' in self.impl_list:
+				imp_names[:0] = ['ipmi']
 
-		imp_names = [imp]
-
-		# Add any additional implementations to the list
-		for method in other_imp:
-			imp_names.append(method)
-
-		# End with ssh
-		imp_names.append('ssh')
+			# Add ssh to be the last implementation used
+			if 'ssh' in self.impl_list:
+				imp_names.append('ssh')
 
 		if cmd not in [ 'on', 'off', 'reset', 'status' ]:
 			raise ParamError(self, 'command', 'must be "on", "off", "reset"')
@@ -117,7 +116,7 @@ class Command(stack.commands.set.host.command):
 						msgs.append(str(imp_msg))
 					self.mq_publish(host, cmd)
 
-					# Set the flag since a CommandError
+					# Set the imp_success flag since a CommandError
 					# wasn't raised when running the implementation
 					# so it succeeded
 					imp_success = True
@@ -125,16 +124,12 @@ class Command(stack.commands.set.host.command):
 				except CommandError as imp_error:
 					debug_msgs.append(str(imp_error))
 
-					# if force_imp was set, don't try any
-					# other implementations
-					if force_imp:
-						break
-
 			msg_output = []
 			if msgs:
 				msg_output = '\n'.join(msgs)
 
 			# debug_msgs will have always at least one entry
+			# So it doesn't have to be checked for being empty
 			debug_output = '\n'.join(debug_msgs)
 			if self.debug:
 				self.addOutput(host, msg_output)
@@ -143,7 +138,7 @@ class Command(stack.commands.set.host.command):
 				self.addOutput(host, msg_output)
 			self.endOutput(padChar='', trimOwner=True)
 
-			# Raise a CommandError if no implementation worked
+			# Raise a CommandError if no implementation succeeded
 			if not imp_success:
 				if self.debug:
 					raise CommandError(self, f'Could not set power cmd {cmd} on host {host}:\n{debug_output}')
