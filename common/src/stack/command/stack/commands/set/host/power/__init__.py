@@ -20,7 +20,7 @@ class Command(stack.commands.set.host.command):
 	</arg>
 
 	<param type='string' name='command' optional='0'>
-	The power command to execute. Valid power commands are: "on", "off" and "reset".
+	The power command to execute. Valid power commands are: "on", "off", "reset", and "status".
 	</param>
 
 	<param type='boolean' name='debug' optional='1'>
@@ -99,7 +99,7 @@ class Command(stack.commands.set.host.command):
 				imp_names.append('ssh')
 
 		if cmd not in [ 'on', 'off', 'reset', 'status' ]:
-			raise ParamError(self, 'command', 'must be "on", "off", "reset"')
+			raise ParamError(self, 'command', 'must be "on", "off", "reset", "status"')
 
 		for host in self.getHostnames(args):
 			debug_msgs = []

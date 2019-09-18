@@ -20,7 +20,7 @@ class TestSetHostPower:
 		result = host.run('stack set host power backend-0-0 command="invalid_command"')
 		assert result.rc == 255
 		assert result.stderr == dedent('''\
-			error - "command" parameter must be "on", "off", "reset"
+			error - "command" parameter must be "on", "off", "reset", "status"
 			{host ...} {command=string} [debug=boolean] [use-method=string]
 		''')
 

@@ -12,6 +12,7 @@ class Implementation(stack.commands.Implementation):
 	def run(self, args):
 		host = args[0]
 		cmd = args[1]
+		out_msg = ''
 
 		# Unlike ipmi, ssh has no way to start a host that is off
 		# We still have to handle the command however
@@ -28,6 +29,7 @@ class Implementation(stack.commands.Implementation):
 			out = cmd_output.stdout
 			if cmd_output.returncode != 0 and f'Connection to {host} closed by remote host' not in out:
 				raise CommandError(self, out)
+			return out_msg
 
 		elif cmd == 'reset':
 			cmd_output = self.owner._exec(
@@ -42,6 +44,7 @@ class Implementation(stack.commands.Implementation):
 			# We shouldn't raise an error because of this
 			if cmd_output.returncode != 0 and f'Connection to {host} closed by remote host' not in out:
 				raise CommandError(self, out)
+			return out_msg
 
 		elif cmd == 'status':
 
@@ -56,4 +59,5 @@ class Implementation(stack.commands.Implementation):
 			if cmd_output.returncode != 0:
 				raise CommandError(self, f'Chassis Power is unreachable via ssh:\n{out}')
 			else:
-				return f'Chassis Power is on\n'
+				out_msg = f'Chassis Power is on\n'
+			return out_msg
