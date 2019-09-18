@@ -12,6 +12,8 @@ app = Flask(__name__)
 app.config["JWT_SECRET_KEY"] = Path("/opt/stack/etc/jwt.secret").read_text()
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(days=30)
 app.config["JWT_ERROR_MESSAGE_KEY"] = "error"
+app.config["JWT_TOKEN_LOCATION"] = ["headers", "cookies"]
+app.config["JWT_ACCESS_COOKIE_PATH"] = "/api/graphql/playground"
 jwt = JWTManager(app)
 
 
@@ -38,4 +40,4 @@ def token():
 		return jsonify({"error": "Access restricted to admin users only"}), 403
 
 	# Generate a token
-	return jsonify({"token": create_access_token(identity=username)}), 200
+	return jsonify({"token": create_access_token(identity=username)})
