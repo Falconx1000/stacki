@@ -25,12 +25,8 @@ class Implementation(stack.commands.Implementation):
 			raise CommandError(self, f'{host} missing ipmi interface.')
 
 		# Try to get ipmi username/passwords, otherwise try defaults
-		try:
-			username = self.owner.call('list.host.attr', args = [host, 'attr=ipmi_username'])[0].get('value')
-		except IndexError:
-			pass
-		if not username:
-			username = 'root'
+		username = self.owner.getHostAttrDict(host)[host].get('ipmi_username', 'root')
+		password = self.owner.getHostAttrDict(host)[host].get('ipmi_password', 'admin')
 
 		try:
 			password = self.owner.call('list.host.attr', args = [host, 'attr=ipmi_password'])[0].get('value')
